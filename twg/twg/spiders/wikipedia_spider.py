@@ -1,6 +1,6 @@
 import scrapy
 import re
-import urlparse
+import urllib.parse
 
 # The purpose of this spider is to output the links between
 # pages within a given category on Wikipedia.
@@ -34,6 +34,7 @@ class WikipediaSpider(scrapy.Spider):
         for page in response.css('#mw-pages a'):
             #self.log('******** RAW URL %s' % page.css('::attr(href)').extract_first())
             page_link = page.css('::attr(href)').re_first(r'[^#]+')
+            #page_url = urllib.parse.urlparse(page_link)
             if page_link is not None and re.search(r":", page_link) is None:
                 self.log('Recursing to page %s (%s)' % (page.css('::text').extract_first(), page_link))
                 page_link = response.urljoin(page_link)
@@ -42,9 +43,20 @@ class WikipediaSpider(scrapy.Spider):
     def parse_page(self, response):
         self.log('Got page for URL %s' % response.url)
         links = set()
-        url = urlparse(response.url)
+        ext = set()
+        resp_url = urllib.parse.urlparse(response.url)
         for link in response.css('#mw-content-text a'):
-            link_link = response.urljoin(link.css('::attr(href)').re_first(r'[^#]+'))
-            if link_link is not None and link_link != response.url:
-                links.add(link_link)
-        yield {"from": response.url, "to": list(links)}
+            link = response.urljoin(link.css('::attr(href)').re_first(r'[^#]+'))
+            link_url = urllib.parse.urlparse(link)
+            # Links to external domains are noted in ext set by their domain only
+            if link_url.netloc != resp_url.netloc:
+                ext.add(link_url.netloc)
+            # We don't want loops, nor non-Wiki pages, nor other meta pages with colon (e.g. Help:)
+            elif link != response.url and re.match(r"^/wiki/[A-Z0-9]{1}", link_url.path) and re.search(r":", link_url.path) is None:
+                # Add the wikipedia page name
+                links.add(re.match(r"^/wiki/(.*)", link_url.path).group(1))
+        yield {
+            "from": re.match(r"^/wiki/(.*)", resp_url.path).group(1),
+            "to": list(links),
+            "ext": list(ext)
+        }
