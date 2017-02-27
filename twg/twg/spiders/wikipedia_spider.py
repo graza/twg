@@ -40,6 +40,14 @@ class WikipediaSpider(scrapy.Spider):
                 page_link = response.urljoin(page_link)
                 yield scrapy.Request(page_link, callback=self.parse_page)
 
+    # Function to strip the path down to something human readable
+    def path_to_title(self, path):
+        path = re.match(r"^/wiki/(.*)", path).group(1)
+        path = urllib.parse.unquote(path)
+        path = re.sub(r"_", " ", path)
+        #self.log('Path is now %s' % path)
+        return path
+
     def parse_page(self, response):
         self.log('Got page for URL %s' % response.url)
         links = set()
@@ -54,9 +62,9 @@ class WikipediaSpider(scrapy.Spider):
             # We don't want loops, nor non-Wiki pages, nor other meta pages with colon (e.g. Help:)
             elif link != response.url and re.match(r"^/wiki/[A-Z0-9]{1}", link_url.path) and re.search(r":", link_url.path) is None:
                 # Add the wikipedia page name
-                links.add(re.match(r"^/wiki/(.*)", link_url.path).group(1))
+                links.add(self.path_to_title(link_url.path))
         yield {
-            "from": re.match(r"^/wiki/(.*)", resp_url.path).group(1),
-            "to": list(links),
-            "ext": list(ext)
+            "from": self.path_to_title(resp_url.path),
+            "to":   list(links),
+            "ext":  list(ext)
         }

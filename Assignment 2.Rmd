@@ -1,0 +1,102 @@
+---
+title: "CT5104 Assignment 2"
+author: "Graham Agnew (Student number 06120661)"
+date: "25-February-2017"
+output: 
+  pdf_document: 
+    fig_caption: yes
+subtitle: MSc Data Analytics - Part Time (GYE07)
+---
+
+## Introduction
+
+In this assignment, web datasets have been produced from Wikipedia using the `scrapy` Python module.  In order that a sufficiently small subset of Wikipedia could be used, the `scrapy` spider has been designed to work from a category page, and work its way down through the tree of sub-categories fetching the pages linked to the category and sub-categories along the way.
+
+## Spider
+
+Category pages in Wikipedia are formed with a URL of the following form:
+
+`http://en.wikipedia.org/wiki/Category:<category>`
+
+The name of the category is substituted for `<category>`.  The MediaWiki content management system that is used to run Wikipedia builds the body of the page with a `<div>` tag with an id attribute equal to `mw-subcategories` plus a `<div>` tag with an id equal to `mw-pages`.
+
+When spidering a category the `parse` method for the category page will iterate through the links in the subcategory section, yielding a new `Request` and effectively recursing back into itself.  It will also iterate through the page links and yield a new `Request` that will use `parse_page` to process the content pages.  The category to use as a starting point can be passed into the spider.
+
+The `parse_page` method iterates through the links found in the `mw-content-text` page element.  These links are filtered such that only links to other wiki pages are included and loops are removed, as are links to "meta" information (e.g. other category pages or help pages).  The end result of processing a page is a Python `dict` that includes the page, a list of pages that it links to, plus a list external domains that it links to.
+
+The output can be in different formats, JSON being a relatively compact form that is convenient for subsequent processing steps.  The R implementation of `igraph` has been used to produce this report, and as such it reads the data sets from file, rather than having them embedded in the report.
+
+It has been found that the pages linked by the category tree link to many other pages outside the category tree.  These other pages are not represented in the graphs below.  Instead only links within the pages of the category are included.
+
+## Algebraists Category
+
+The following graph shows the pages under the "Algebraists" category on Wikipedia.  This category includes four subcategories and rougly four hundred and fifty pages in total.  
+
+### Graph
+
+The graph of the pages is seen here below.  In this graph the size of the nodes reflects the log of the total degree of the node.  For the sake of readability, no arrows are shown for the graph even though it is directed.
+
+```{r, echo=FALSE, results='hide', message=FALSE}
+library(ggplot2)
+library(igraph)
+library(RJSONIO)
+
+filename <- file.path('assignment2', 'twg', 'yyy2.json')
+json <- fromJSON(filename, encoding = "utf-8")
+page_names <- names(json)
+g <- make_empty_graph(directed = TRUE) %>% add_vertices(length(page_names), name = page_names)
+i <- 1
+for (p in page_names) {
+  for (t in json[[p]]) {
+    j <- (1:length(page_names))[page_names == t]
+    g <- add_edges(g, c(i, j))
+  }
+  i <- i + 1
+}
+V(g)$size <- sapply(degree(g), function(x) ifelse(x<2, 0.5, log(x)))*2
+par(mai=c(0,0,1,0))
+plot(g, vertex.size=1)
+plot(g, layout=layout.fruchterman.reingold,	
+     main='Wikipedia category map',
+     #vertex.label.dist=0.5,			#puts the name labels slightly off the dots
+     vertex.frame.color='blue', 		#the color of the border of the dots 
+     vertex.label.color='black',		#the color of the name labels
+     vertex.label.font=2,			#the font of the name labels
+     #vertex.label=V(g)$name,		#specifies the lables of the vertices. in this case the 'name' attribute is used
+     vertex.label=NA,
+     edge.arrow.mode="-",
+     vertex.label.cex=1			#specifies the size of the font of the labels. can also be made to vary
+)
+```
+It is noted that there are many pages with no links to any others within this category.  These can be seen in the semi-circle of disconnected nodes around the perimeter.  Even with this small number of nodes we can see the graph starting to exhibit some of the classic bowtie shape seen in the internet.
+
+### Degree Distribution
+
+```{r, echo=FALSE}
+d_out_tab <- table(degree(g, mode = "out"))
+d_out <- data.frame(d_out_tab)
+d_out <- cbind(d_out, d_out=as.numeric(names(d_out_tab)))
+
+d_in_tab <- table(degree(g, mode = "in"))
+d_in <- data.frame(d_in_tab)
+d_in <- cbind(d_in, d_in=as.numeric(names(d_in_tab)))
+
+ggplot() + theme_bw() +
+  geom_point(data = d_out, aes(d_out,Freq)) +
+  geom_point(data = d_in, aes(d_in,Freq), colour="red") +
+  scale_x_log10() + scale_y_log10() + xlab("Degree")
+```
+
+
+### Clustering coefficient
+
+```{r}
+transitivity(g)
+```
+
+### Average path length
+
+```{r}
+mean_distance(g)
+```
+
