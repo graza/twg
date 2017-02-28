@@ -43,7 +43,7 @@ class WikipediaSpider(scrapy.Spider):
     # Function to strip the path down to something human readable
     def path_to_title(self, path):
         path = re.match(r"^/wiki/(.*)", path).group(1)
-        path = urllib.parse.unquote(path)
+        #path = urllib.parse.unquote(path)
         path = re.sub(r"_", " ", path)
         #self.log('Path is now %s' % path)
         return path

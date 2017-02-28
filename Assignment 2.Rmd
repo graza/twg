@@ -1,6 +1,8 @@
 ---
 title: "CT5104 Assignment 2"
-author: "Graham Agnew (Student number 06120661)"
+author: 
+  - "Graham Agnew (Student number 06120661)"
+  - "Raghu (Student number 06120661)"
 date: "25-February-2017"
 output: 
   pdf_document: 
@@ -41,8 +43,8 @@ library(ggplot2)
 library(igraph)
 library(RJSONIO)
 
-filename <- file.path('assignment2', 'twg', 'yyy2.json')
-json <- fromJSON(filename, encoding = "utf-8")
+filename <- file.path('twg', 'yyy.json')
+json <- fromJSON(filename) #, encoding = "utf-8")
 page_names <- names(json)
 g <- make_empty_graph(directed = TRUE) %>% add_vertices(length(page_names), name = page_names)
 i <- 1
@@ -55,7 +57,7 @@ for (p in page_names) {
 }
 V(g)$size <- sapply(degree(g), function(x) ifelse(x<2, 0.5, log(x)))*2
 par(mai=c(0,0,1,0))
-plot(g, vertex.size=1)
+#plot(g, vertex.size=1)
 plot(g, layout=layout.fruchterman.reingold,	
      main='Wikipedia category map',
      #vertex.label.dist=0.5,			#puts the name labels slightly off the dots
@@ -64,10 +66,11 @@ plot(g, layout=layout.fruchterman.reingold,
      vertex.label.font=2,			#the font of the name labels
      #vertex.label=V(g)$name,		#specifies the lables of the vertices. in this case the 'name' attribute is used
      vertex.label=NA,
-     edge.arrow.mode="-",
+     edge.arrow.size=0.2,
      vertex.label.cex=1			#specifies the size of the font of the labels. can also be made to vary
 )
 ```
+
 It is noted that there are many pages with no links to any others within this category.  These can be seen in the semi-circle of disconnected nodes around the perimeter.  Even with this small number of nodes we can see the graph starting to exhibit some of the classic bowtie shape seen in the internet.
 
 ### Degree Distribution
@@ -87,16 +90,25 @@ ggplot() + theme_bw() +
   scale_x_log10() + scale_y_log10() + xlab("Degree")
 ```
 
+|$N$|$L$|$\left \langle k^{in} \right \rangle$|$\left \langle k^{out} \right \rangle$|$\left \langle k^{total} \right \rangle$|$\overline{C}$|$\left \langle d \right \rangle$|$\frac{\log N}{\log \left \langle k \right \rangle}$
+|:---:|:----:|:------:|:------:|:------:|:------:|:------:|:------:|
+`r length(V(g))`|`r length(E(g))`|`r mean(degree(g, mode = "in"))`|`r mean(degree(g, mode = "out"))`|`r mean(degree(g, mode = "total"))`|`r transitivity(g)`|`r mean_distance(g, directed = FALSE)`|`r log(length(V(g)))/log(mean(degree(g, mode = "total")))`
 
-### Clustering coefficient
-
-```{r}
-transitivity(g)
-```
-
-### Average path length
+## Comparison with small world model
 
 ```{r}
-mean_distance(g)
+beta <- 1 - (transitivity(g)/transitivity(sample_smallworld(1,length(V(g)),2,0)))^(1/3)
+sw <- sample_smallworld(1, length(V(g)), 2, beta)
 ```
+
+We compare the graph found through web mining with the small world model.  The value for the rewiring probability was derived using the following formula:
+
+$\beta = 1 - \sqrt[3]{\frac{C(\beta)}{C(0)}}$
+
+Where $C(\beta)$ is set to the clustering coefficient of the mined graph.  This yields a rewiring probability of about 13.4%.
+
+|Value|Mined Network|Small World Network|
+|:------:|:------:|:------:|
+$\left \langle d \right \rangle$|`r mean_distance(g, directed = FALSE)`|`r mean_distance(sw, directed = FALSE)`|
+$\overline{C}$|`r transitivity(g)`|`r transitivity(sw)`|
 
