@@ -138,6 +138,7 @@ The following table shows the values for the average path length and the cluster
 $\left \langle d \right \rangle$|`r mean_distance(g, directed = FALSE)`|`r mean_distance(sw, directed = FALSE)`|`r mean_distance(er, directed = FALSE)`|`r mean_distance(pa, directed = FALSE)`
 $\overline{C}$|`r transitivity(g)`|`r transitivity(sw)`|`r transitivity(er)`|`r transitivity(pa)`
 
+The small world model closest reflects the average clustering coefficient $\overline{C}$, while the average path length is best approximated by the $G(n,m)$ model.
 
 \newpage
 ## Ottoman pirates category
@@ -233,6 +234,9 @@ The following table shows the values for the average path length and the cluster
 $\left \langle d \right \rangle$|`r mean_distance(g, directed = FALSE)`|`r mean_distance(sw, directed = FALSE)`|`r mean_distance(er, directed = FALSE)`|`r mean_distance(pa, directed = FALSE)`
 $\overline{C}$|`r transitivity(g)`|`r transitivity(sw)`|`r transitivity(er)`|`r transitivity(pa)`
 
+The small world model closest reflects the average clustering coefficient $\overline{C}$, while the average path length is best approximated by the $G(n,m)$ model.
+
+\newpage
 ## Conclusions
 
 In both the Algebraists and Ottoman Pirates categories, certain shortcomings of Wikipedia categories have been found.  The central idea behind the creation and maintenance of wiki pages has created a vast array of freely available information.  However as we have seen above in the Algebraists example, it is easy for the unstructured nature of a wiki to create links to less than relevant pages.
@@ -243,6 +247,10 @@ In either case however we were able to see degree distributions reflective of th
 
 \newpage
 ## Appendix
+
+The main code for this assignment is given below.  It can also be found on GitHub, including this R Markdown report and data sets:
+
+`https://github.com/graza/twg`
 
 ### Scrapy class
 
