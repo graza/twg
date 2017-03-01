@@ -2,48 +2,52 @@
 title: "CT5104 Assignment 2"
 author: 
   - "Graham Agnew (Student number 06120661)"
-  - "Raghu (Student number )"
+  - "Raghavendra Mahalingappa (Student number )"
 date: "25-February-2017"
 output: 
   pdf_document: 
     fig_caption: yes
 subtitle: MSc Data Analytics - Part Time (GYE07)
 ---
+```{r, echo=FALSE, message=FALSE, results='hide'}
+library(ggplot2)
+library(igraph)
+library(RJSONIO)
+```
 
 ## Introduction
 
 In this assignment, web datasets have been produced from Wikipedia using the `scrapy` Python module.  In order that a sufficiently small subset of Wikipedia could be used, the `scrapy` spider has been designed to work from a category page, and work its way down through the tree of sub-categories fetching the pages linked to the category and sub-categories along the way.
 
-## Spider
+The generated networks are analysed, graph measures drawn from them, and each is compared against three randomly generated network models: Watts-Strogatz (small-world), Erd&#337;s-R&eacute;nyi, and a B&aacute;rabasi-Albert model.
+
+## Spider design
 
 Category pages in Wikipedia are formed with a URL of the following form:
 
 `http://en.wikipedia.org/wiki/Category:<category>`
 
-The name of the category is substituted for `<category>`.  The MediaWiki content management system that is used to run Wikipedia builds the body of the page with a `<div>` tag with an id attribute equal to `mw-subcategories` plus a `<div>` tag with an id equal to `mw-pages`.
+The name of the category is substituted for `<category>`.  The MediaWiki content management system that is used to run Wikipedia builds the body of the category page with two particular `<div>` tags with the id attributes equal to `mw-subcategories` and `mw-pages`, each containing links to sub-categories and pages within the category respectively.
 
-When spidering a category the `parse` method for the category page will iterate through the links in the subcategory section, yielding a new `Request` and effectively recursing back into itself.  It will also iterate through the page links and yield a new `Request` that will use `parse_page` to process the content pages.  The category to use as a starting point can be passed into the spider.
+When spidering a category the `parse` method for the category page will iterate through the links in the subcategory section, yielding a new `Request` and effectively recursing back into itself.  It will also iterate through the page links and yield a new `Request` that will use `parse_page` to process the content pages.  The category to use as a starting point can be passed into the spider as an argument.
 
 The `parse_page` method iterates through the links found in the `mw-content-text` page element.  These links are filtered such that only links to other wiki pages are included and loops are removed, as are links to "meta" information (e.g. other category pages or help pages).  The end result of processing a page is a Python `dict` that includes the page, a list of pages that it links to, plus a list external domains that it links to.
 
-The output can be in different formats, JSON being a relatively compact form that is convenient for subsequent processing steps.  The R implementation of `igraph` has been used to produce this report, and as such it reads the data sets from file, rather than having them embedded in the report.
+The output can be in different formats, JSON-lines being a relatively compact form that is convenient for subsequent processing steps.  The R implementation of `igraph` has been used to produce this report, and as such it reads the data sets from file, rather than having them embedded in the report.
 
-It has been found that the pages linked by the category tree link to many other pages outside the category tree.  These other pages are not represented in the graphs below.  Instead only links within the pages of the category are included.
+It has been found that the pages linked by the category tree link to many other pages outside the category tree.  These other pages are not represented in the graphs below.  Instead only links within the pages of the category are included.  A preprocessing python script has been created to make it easier for R to read the JSON.
 
+\newpage
 ## Algebraists Category
 
-The following graph shows the pages under the "Algebraists" category on Wikipedia.  This category includes four subcategories and rougly four hundred and fifty pages in total.  
+The first data set built is from the pages under the "Algebraists" category on Wikipedia.  This category includes four subcategories and rougly four hundred and eighty pages in total.  
 
 ### Graph
 
-The graph of the pages is seen here below.  In this graph the size of the nodes reflects the log of the total degree of the node.  For the sake of readability, no arrows are shown for the graph even though it is directed.
+The graph of the pages is seen in Figure 1 below.  In this graph the size of the nodes reflects the log of the total degree of the node.  For the sake of readability, no vertex labels are shown for the graph even though it is available.
 
-```{r, echo=FALSE, results='hide', message=FALSE}
-library(ggplot2)
-library(igraph)
-library(RJSONIO)
-
-filename <- file.path('twg', 'yyy.json')
+```{r, echo=FALSE, results='hide', message=FALSE, fig.height=8, fig.cap="Algebraists Network"}
+filename <- file.path('twg', 'algebraists.json')
 json <- fromJSON(filename) #, encoding = "utf-8")
 page_names <- names(json)
 g <- make_empty_graph(directed = TRUE) %>% add_vertices(length(page_names), name = page_names)
@@ -57,25 +61,29 @@ for (p in page_names) {
 }
 V(g)$size <- sapply(degree(g), function(x) ifelse(x<2, 0.5, log(x)))*2
 par(mai=c(0,0,1,0))
-#plot(g, vertex.size=1)
+
 plot(g, layout=layout.fruchterman.reingold,	
-     main='Wikipedia category map',
      #vertex.label.dist=0.5,			#puts the name labels slightly off the dots
      vertex.frame.color='blue', 		#the color of the border of the dots 
      vertex.label.color='black',		#the color of the name labels
      vertex.label.font=2,			#the font of the name labels
      #vertex.label=V(g)$name,		#specifies the lables of the vertices. in this case the 'name' attribute is used
+     vertex.label.cex=1,			#specifies the size of the font of the labels. can also be made to vary
      vertex.label=NA,
-     edge.arrow.size=0.2,
-     vertex.label.cex=1			#specifies the size of the font of the labels. can also be made to vary
+     edge.arrow.size=0.2, edge.curved = TRUE,
+     frame = TRUE
 )
 ```
 
-It is noted that there are many pages with no links to any others within this category.  These can be seen in the semi-circle of disconnected nodes around the perimeter.  Even with this small number of nodes we can see the graph starting to exhibit some of the classic bowtie shape seen in the internet.
+It is noted that there are many pages with no links to any others within this category.  These can be seen in the semi-circle of disconnected nodes around the perimeter.  
+
+The node with the highest in-degree "Edmund F. Robertson" actually has zero out-degree.  It was found that this was a link to an author of a mathematical history archive website.  Although the link was typically found at the end of the page in an External Links section, the author of the externally linked resource has his own wiki page.  Furthermore there is nothing particular about the page strcuture (apart from the heading which may be seen as unstructured data) that would indicate the relevance of this link.
 
 ### Degree Distribution
 
-```{r, echo=FALSE}
+We plotted the degree distribution shown in Figure 2 to understand more about the nature of this network.  We found that the distribution plotted on a log-log scale exhibits a linear form and is hence a power-law distribution and is therefore likely scale-free.
+
+```{r, echo=FALSE, fig.height=4, fig.cap="Algebraists Degree Distribution"}
 d_out_tab <- table(degree(g, mode = "out"))
 d_out <- data.frame(d_out_tab)
 d_out <- cbind(d_out, d_out=as.numeric(names(d_out_tab)))
@@ -84,31 +92,312 @@ d_in_tab <- table(degree(g, mode = "in"))
 d_in <- data.frame(d_in_tab)
 d_in <- cbind(d_in, d_in=as.numeric(names(d_in_tab)))
 
+N <- length(V(g))
+L <- length(E(g))
+k_in  <- mean(degree(g, mode = "in"))
+k_out <- mean(degree(g, mode = "out"))
+k_tot <- mean(degree(g, mode = "total"))
+
 ggplot() + theme_bw() +
   geom_point(data = d_out, aes(d_out,Freq)) +
   geom_point(data = d_in, aes(d_in,Freq), colour="red") +
   scale_x_log10() + scale_y_log10() + xlab("Degree")
 ```
 
+### Graph measures
+
 |$N$|$L$|$\left \langle k^{in} \right \rangle$|$\left \langle k^{out} \right \rangle$|$\left \langle k^{total} \right \rangle$|$\overline{C}$|$\left \langle d \right \rangle$|$\frac{\log N}{\log \left \langle k \right \rangle}$
 |:---:|:----:|:------:|:------:|:------:|:------:|:------:|:------:|
-`r length(V(g))`|`r length(E(g))`|`r mean(degree(g, mode = "in"))`|`r mean(degree(g, mode = "out"))`|`r mean(degree(g, mode = "total"))`|`r transitivity(g)`|`r mean_distance(g, directed = FALSE)`|`r log(length(V(g)))/log(mean(degree(g, mode = "total")))`
+`r N`|`r L`|`r k_in`|`r k_out`|`r k_tot`|`r transitivity(g)`|`r mean_distance(g, directed = FALSE)`|`r log(length(V(g)))/log(mean(degree(g, mode = "total")))`
 
-## Comparison with small world model
+From the network diagram and the average degree, we observe that the network is super-critical; the giant component is well formed, although there are still many isolated nodes.  The fact that these isoltaed nodes are almost all completely isolated may indicate some form of mis-categorisation or lack of information about these nodes (i.e. stubs).
+
+The average path length is a good match for the value that corresponds to the small-world phenomena.
+
+\newpage
+### Comparison with simulated models
 
 ```{r, echo=FALSE}
-beta <- 1 - (transitivity(g)/transitivity(sample_smallworld(1,length(V(g)),2,0)))^(1/3)
+beta <- max(c(1 - (transitivity(g)/transitivity(sample_smallworld(1,length(V(g)),2,0)))^(1/3), 0))
 sw <- sample_smallworld(1, length(V(g)), 2, beta)
+er <- erdos.renyi.game(N, L, type = "gnm")
+pa <- sample_pa(n = N, m = k_tot, directed = FALSE)
 ```
 
-We compare the graph found through web mining with the small world model.  The value for the rewiring probability was derived using the following formula:
+We compare the graph found through web mining with a number of simulated graphs. The Watts-Strogratz model was used to generate a small world model.  The value for the rewiring probability was derived using the following formula:
 
 $$\beta = 1 - \sqrt[3]{\frac{C(\beta)}{C(0)}}$$
 
-Where $C(\beta)$ is set to the clustering coefficient of the mined graph.  This yields a rewiring probability of about 13.4%.  The following table shows the values for the average path length and the clustering coefficient for both the mined graph and the small world model.  The differences here can probably be accounted for by the disconnected nodes in the mined graph.
+Where $C(\beta)$ is set to the clustering coefficient of the mined graph.  This yields a rewiring probability of about 13.4%.  Also a comparison was made with an Erd&#337;s-R&eacute;nyi model (i.e. a $G(n,m)$ model) network using the number of nodes and edges from the mined graph, and an undirected B&aacute;rabasi-Albert or Preferential Attachment model using the number of nodes and average total degree.
 
-|Value|Mined Network|Small World Network|
-|:------:|:------:|:------:|
-$\left \langle d \right \rangle$|`r mean_distance(g, directed = FALSE)`|`r mean_distance(sw, directed = FALSE)`|
-$\overline{C}$|`r transitivity(g)`|`r transitivity(sw)`|
+The following table shows the values for the average path length and the clustering coefficient for both the mined network and the simulated networks.
 
+
+|Value|Mined Network|Small World|G(n,m)|PA Model|
+|:------:|:------:|:------:|:------:|:------:|
+$\left \langle d \right \rangle$|`r mean_distance(g, directed = FALSE)`|`r mean_distance(sw, directed = FALSE)`|`r mean_distance(er, directed = FALSE)`|`r mean_distance(pa, directed = FALSE)`
+$\overline{C}$|`r transitivity(g)`|`r transitivity(sw)`|`r transitivity(er)`|`r transitivity(pa)`
+
+
+\newpage
+## Ottoman pirates category
+
+The following graph shows the pages under the "Ottoman pirates" category on Wikipedia.  This category includes four subcategories and rougly four hundred and seventy pages in total.  It was chosen for its similar size to the "Algebraists" category above.
+
+### Ottoman pirates network
+
+The graph of the pages is seen in Figure 3 below.  In this graph the size of the nodes reflects the log of the total degree of the node.  For the sake of readability, no arrows are shown for the graph even though it is directed.
+
+```{r, echo=FALSE, results='hide', message=FALSE, fig.height=8, fig.cap="Ottoman Pirates Network"}
+filename <- file.path('twg', 'ottoman_pirates.json')
+json <- fromJSON(filename) #, encoding = "utf-8")
+page_names <- names(json)
+g <- make_empty_graph(directed = TRUE) %>% add_vertices(length(page_names), name = page_names)
+i <- 1
+for (p in page_names) {
+  for (t in json[[p]]) {
+    j <- (1:length(page_names))[page_names == t]
+    g <- add_edges(g, c(i, j))
+  }
+  i <- i + 1
+}
+V(g)$size <- sapply(degree(g), function(x) ifelse(x<2, 0.5, log(x)))*2
+par(mai=c(0,0,1,0))
+plot(g, layout=layout.fruchterman.reingold,	
+     #vertex.label.dist=0.5,			#puts the name labels slightly off the dots
+     vertex.frame.color='blue', 		#the color of the border of the dots 
+     vertex.label.color='black',		#the color of the name labels
+     vertex.label.font=2,			#the font of the name labels
+     #vertex.label=V(g)$name,		#specifies the lables of the vertices. in this case the 'name' attribute is used
+     vertex.label.cex=1,			#specifies the size of the font of the labels. can also be made to vary
+     vertex.label=NA,
+     edge.arrow.size=0.2, edge.curved = TRUE,
+     frame = TRUE
+)
+```
+
+The structure of this network, being based in a particular period of history is more similar to a modern social network.  A large part of this graph is reflective of the poorly structured category tree in which the city of Rabat in Morocco is listed as a sub-category.  This created links to many unrelated wiki pages.
+
+### Degree Distribution
+
+Again we plotted the degree distribution, shown in Figure 4, to understand more about the nature of this network.  We found that the distribution plotted on a log-log scale may exhibit an element of low degree saturation, although it is difficult to discern.  There also seemed to be a seond distribution in play as seen by the spike in the distribution around degree of 20.  This is presumably to do with the poor structure of the category tree.
+
+```{r, echo=FALSE, fig.height=4, fig.cap="Degree Distribution"}
+d_out_tab <- table(degree(g, mode = "out"))
+d_out <- data.frame(d_out_tab)
+d_out <- cbind(d_out, d_out=as.numeric(names(d_out_tab)))
+
+d_in_tab <- table(degree(g, mode = "in"))
+d_in <- data.frame(d_in_tab)
+d_in <- cbind(d_in, d_in=as.numeric(names(d_in_tab)))
+
+N <- length(V(g))
+L <- length(E(g))
+k_in  <- mean(degree(g, mode = "in"))
+k_out <- mean(degree(g, mode = "out"))
+k_tot <- mean(degree(g, mode = "total"))
+
+ggplot() + theme_bw() +
+  geom_point(data = d_out, aes(d_out,Freq)) +
+  geom_point(data = d_in, aes(d_in,Freq), colour="red") +
+  scale_x_log10() + scale_y_log10() + xlab("Degree")
+```
+
+### Graph measures
+
+|$N$|$L$|$\left \langle k^{in} \right \rangle$|$\left \langle k^{out} \right \rangle$|$\left \langle k^{total} \right \rangle$|$\overline{C}$|$\left \langle d \right \rangle$|$\frac{\log N}{\log \left \langle k \right \rangle}$
+|:---:|:----:|:------:|:------:|:------:|:------:|:------:|:------:|
+`r N`|`r L`|`r k_in`|`r k_out`|`r k_tot`|`r transitivity(g)`|`r mean_distance(g, directed = FALSE)`|`r log(length(V(g)))/log(mean(degree(g, mode = "total")))`
+
+From the network diagram and the average degree, we observe again that the network is super-critical, the giant component is well formed;  there are fewer isolated nodes in this case.  Similar conclusions may be drawn about the isoltaed nodes - that there may be some form of mis-categorisation or lack of information about these nodes.
+
+The average path length is again a good match for the value that corresponds to the small-world phenomena.
+
+\newpage
+### Comparison with simulated models
+
+```{r, echo=FALSE}
+beta <- max(c(1 - (transitivity(g)/transitivity(sample_smallworld(1,length(V(g)),2,0)))^(1/3), 0))
+sw <- sample_smallworld(1, N, 2, beta)
+er <- erdos.renyi.game(N, L, type = "gnm")
+pa <- sample_pa(n = N, m = k_tot, directed = FALSE)
+```
+
+We again compared the graph found through web mining with a number of simulated graphs. The Watts-Strogratz model was used to generate a small world model.  In this case the formula for $\beta$, resulted in a negative value.  This was therfore set to zero for the mode generator.  Also a comparison was made with an Erd&#337;s-R&eacute;nyi model (i.e. a $G(n,m)$ model), and an undirected B&aacute;rabasi-Albert or Preferential Attachment model as before.
+
+The following table shows the values for the average path length and the clustering coefficient for both the mined network and the simulated networks.
+
+
+|Value|Mined Network|Small World|G(n,m)|PA Model|
+|:------:|:------:|:------:|:------:|:------:|
+$\left \langle d \right \rangle$|`r mean_distance(g, directed = FALSE)`|`r mean_distance(sw, directed = FALSE)`|`r mean_distance(er, directed = FALSE)`|`r mean_distance(pa, directed = FALSE)`
+$\overline{C}$|`r transitivity(g)`|`r transitivity(sw)`|`r transitivity(er)`|`r transitivity(pa)`
+
+## Conclusions
+
+In both the Algebraists and Ottoman Pirates categories, certain shortcomings of Wikipedia categories have been found.  The central idea behind the creation and maintenance of wiki pages has created a vast array of freely available information.  However as we have seen above in the Algebraists example, it is easy for the unstructured nature of a wiki to create links to less than relevant pages.
+
+In the case of the Ottoman Pirates, we see that a mis-categorisation in a category tree pulls in large numbers of irrelvant nodes - in this case Rabat.
+
+In either case however we were able to see degree distributions reflective of theoretical predictions for scale-free networks, possibly with a degree of low-degree saturation.
+
+\newpage
+## Appendix
+
+### Scrapy class
+
+```{python, eval=FALSE}
+import scrapy
+import re
+import urllib.parse
+
+# The purpose of this spider is to output the links between
+# pages within a given category on Wikipedia.
+#
+# The spider starts from a category and recurses into all
+# linked subcategories.  It also fetches the linked pages
+# using a different parser which generates the output of
+# the links between pages.
+class WikipediaSpider(scrapy.Spider):
+    name = "wikipedia"
+
+    # The start request is the named category page
+    def start_requests(self):
+        url = 'https://en.wikipedia.org/wiki/Category:Mathematics'
+        category = getattr(self, 'category', 'Algebraists')
+        url = 'https://en.wikipedia.org/wiki/Category:' + category
+        yield scrapy.Request(url, self.parse)
+
+    def parse(self, response):
+        self.log('Got page for URL %s' % response.url)
+
+        # Fetch and recurse into all subcategories
+        for subcat in response.css('#mw-subcategories a'):
+            subcat_link = subcat.css('::attr(href)').extract_first()
+            if subcat_link is not None:
+                self.log('Recursing to subcategory %s' % subcat.css('::text').extract_first())
+                subcat_link = response.urljoin(subcat_link)
+                yield scrapy.Request(subcat_link, callback=self.parse)
+
+        # Fetch all pages linked
+        for page in response.css('#mw-pages a'):
+            #self.log('******** RAW URL %s' % page.css('::attr(href)').extract_first())
+            page_link = page.css('::attr(href)').re_first(r'[^#]+')
+            #page_url = urllib.parse.urlparse(page_link)
+            if page_link is not None and re.search(r":", page_link) is None:
+                self.log('Recursing to page %s (%s)' % (page.css('::text').extract_first(), page_link))
+                page_link = response.urljoin(page_link)
+                yield scrapy.Request(page_link, callback=self.parse_page)
+
+    # Function to strip the path down to something human readable
+    def path_to_title(self, path):
+        path = re.match(r"^/wiki/(.*)", path).group(1)
+        #path = urllib.parse.unquote(path)
+        path = re.sub(r"_", " ", path)
+        #self.log('Path is now %s' % path)
+        return path
+
+    def parse_page(self, response):
+        self.log('Got page for URL %s' % response.url)
+        links = set()
+        ext = set()
+        resp_url = urllib.parse.urlparse(response.url)
+        for link in response.css('#mw-content-text a'):
+            link = response.urljoin(link.css('::attr(href)').re_first(r'[^#]+'))
+            link_url = urllib.parse.urlparse(link)
+            # Links to external domains are noted in ext set by their domain only
+            if link_url.netloc != resp_url.netloc:
+                ext.add(link_url.netloc)
+            # We don't want loops, nor non-Wiki pages, nor other meta pages with colon (e.g. Help:)
+            elif link != response.url and re.match(r"^/wiki/[A-Z0-9]{1}", link_url.path) and re.search(r":", link_url.path) is None:
+                # Add the wikipedia page name
+                links.add(self.path_to_title(link_url.path))
+        yield {
+            "from": self.path_to_title(resp_url.path),
+            "to":   list(links),
+            "ext":  list(ext)
+        }
+```
+
+### Preprocessor
+
+```{python, eval=FALSE}
+import json
+import fileinput
+
+pages = dict()
+for line in fileinput.input():
+    page = json.loads(line)
+    pages[page["from"]] = page["to"]
+
+for (page, old_to) in pages.items():
+    new_to = list()
+    for to_page in old_to:
+        if to_page in pages:
+            new_to.append(to_page)
+    pages[page] = new_to
+
+print(json.dumps(pages, sort_keys = True, indent = 4, ensure_ascii=False))
+```
+
+### Code chunk to produce network plot
+
+```{r, eval=FALSE}
+filename <- file.path('twg', 'ottoman_pirates.json')
+json <- fromJSON(filename) #, encoding = "utf-8")
+page_names <- names(json)
+g <- make_empty_graph(directed = TRUE) %>% add_vertices(length(page_names), name = page_names)
+i <- 1
+for (p in page_names) {
+  for (t in json[[p]]) {
+    j <- (1:length(page_names))[page_names == t]
+    g <- add_edges(g, c(i, j))
+  }
+  i <- i + 1
+}
+V(g)$size <- sapply(degree(g), function(x) ifelse(x<2, 0.5, log(x)))*2
+par(mai=c(0,0,1,0))
+plot(g, layout=layout.fruchterman.reingold,	
+     #vertex.label.dist=0.5,			#puts the name labels slightly off the dots
+     vertex.frame.color='blue', 		#the color of the border of the dots 
+     vertex.label.color='black',		#the color of the name labels
+     vertex.label.font=2,			#the font of the name labels
+     #vertex.label=V(g)$name,		#specifies the lables of the vertices. in this case the 'name' attribute is used
+     vertex.label.cex=1,			#specifies the size of the font of the labels. can also be made to vary
+     vertex.label=NA,
+     edge.arrow.size=0.2, edge.curved = TRUE,
+     frame = TRUE
+)
+```
+
+### Code chunk to produce degree distribution
+
+```{r, eval=FALSE}
+d_out_tab <- table(degree(g, mode = "out"))
+d_out <- data.frame(d_out_tab)
+d_out <- cbind(d_out, d_out=as.numeric(names(d_out_tab)))
+
+d_in_tab <- table(degree(g, mode = "in"))
+d_in <- data.frame(d_in_tab)
+d_in <- cbind(d_in, d_in=as.numeric(names(d_in_tab)))
+
+N <- length(V(g))
+L <- length(E(g))
+k_in  <- mean(degree(g, mode = "in"))
+k_out <- mean(degree(g, mode = "out"))
+k_tot <- mean(degree(g, mode = "total"))
+
+ggplot() + theme_bw() +
+  geom_point(data = d_out, aes(d_out,Freq)) +
+  geom_point(data = d_in, aes(d_in,Freq), colour="red") +
+  scale_x_log10() + scale_y_log10() + xlab("Degree")
+```
+
+### Code chunk to create simulated models
+
+```{r, eval=FALSE}
+beta <- max(c(1 - (transitivity(g)/transitivity(sample_smallworld(1,length(V(g)),2,0)))^(1/3), 0))
+sw <- sample_smallworld(1, N, 2, beta)
+er <- erdos.renyi.game(N, L, type = "gnm")
+pa <- sample_pa(n = N, m = k_tot, directed = FALSE)
+```
